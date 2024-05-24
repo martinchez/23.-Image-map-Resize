@@ -4,9 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Image manipulation on Leaflet</title>
+    <title>Image Manipulation on Leaflet</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <script src="https://unpkg.com/konva@8.2.0/konva.min.js"></script>
@@ -22,18 +22,17 @@
 
         #konva-container {
             position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            z-index: 1;
+            width: 200px;
+            height: 200px;
+            z-index: 1000;
         }
     </style>
 </head>
 
 <body>
-    <div id="map"></div>
-    <div id="konva-container"></div>
+    <div id="map">
+        <div id="konva-container"></div>
+    </div>
     <script>
         var map = L.map('map').setView([51.505, -0.09], 13);
         L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -54,25 +53,25 @@
         img.src = 'https://assets-global.website-files.com/65943d23dc44e6ce92eb6b67/65fc9f534c1398dac499304d_commercial_search-p-800.jpg';
         img.onload = function () {
             const latlng = L.latLng(51.5, -0.09);
-            const point = map.latLngToContainerPoint(latlng);
+            const initialZoom = map.getZoom();
 
             // Maximum width for the image
             const MAX_IMAGE_WIDTH = 200;
 
             // Calculate scaling factor to fit the image within the maximum width
             const scale = MAX_IMAGE_WIDTH / img.width;
-            const width = img.width * scale;
-            const height = img.height * scale;
+            const originalWidth = img.width * scale;
+            const originalHeight = img.height * scale;
 
             const konvaImage = new Konva.Image({
                 image: img,
-                x: point.x,
-                y: point.y,
-                width: width,
-                height: height,
+                x: map.latLngToContainerPoint(latlng).x,
+                y: map.latLngToContainerPoint(latlng).y,
+                width: originalWidth,
+                height: originalHeight,
                 draggable: true,
-                offsetX: width / 2,
-                offsetY: height / 2
+                offsetX: originalWidth / 2,
+                offsetY: originalHeight / 2
             });
             layer.add(konvaImage);
             layer.draw();
@@ -93,6 +92,35 @@
                 layer.draw();
             });
 
+            // Disable map interactions when manipulating the image
+            konvaImage.on('transformstart', function () {
+                map.dragging.disable();
+                map.touchZoom.disable();
+                map.doubleClickZoom.disable();
+                map.scrollWheelZoom.disable();
+                map.boxZoom.disable();
+                map.keyboard.disable();
+            });
+
+            konvaImage.on('transformend', function () {
+                map.dragging.enable();
+                map.touchZoom.enable();
+                map.doubleClickZoom.enable();
+                map.scrollWheelZoom.enable();
+                map.boxZoom.enable();
+                map.keyboard.enable();
+                updateLatLngFromPosition();
+            });
+
+            konvaImage.on('dragstart', function () {
+                map.dragging.disable();
+            });
+
+            konvaImage.on('dragend', function () {
+                map.dragging.enable();
+                updateLatLngFromPosition();
+            });
+
             // Hide transformer when clicking outside the image
             stage.on('click', function (e) {
                 if (e.target === stage) {
@@ -101,16 +129,34 @@
                 }
             });
 
-            // Update image position on map move or zoom
-            map.on('move', updateImagePosition);
-            map.on('zoom', updateImagePosition);
+            // Update image position and scale on map move or zoom
+            map.on('move', updateImagePositionAndScale);
+            map.on('zoom', updateImagePositionAndScale);
 
-            function updateImagePosition() {
-                const point = map.latLngToContainerPoint(latlng);
+            let imageLatLng = latlng;
+            let imageRotation = 0;
+            let imageScale = { width: originalWidth, height: originalHeight };
+
+            function updateLatLngFromPosition() {
+                const position = konvaImage.position();
+                imageLatLng = map.containerPointToLatLng(position);
+                imageRotation = konvaImage.rotation();
+                imageScale = {
+                    width: konvaImage.width(),
+                    height: konvaImage.height()
+                };
+            }
+
+            function updateImagePositionAndScale() {
+                const point = map.latLngToContainerPoint(imageLatLng);
                 konvaImage.position({
                     x: point.x,
                     y: point.y
                 });
+                konvaImage.width(imageScale.width);
+                konvaImage.height(imageScale.height);
+                konvaImage.rotation(imageRotation);
+
                 layer.batchDraw();
             }
 

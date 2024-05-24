@@ -19,25 +19,26 @@ img.src =
   'https://assets-global.website-files.com/65943d23dc44e6ce92eb6b67/65fc9f534c1398dac499304d_commercial_search-p-800.jpg'
 img.onload = function () {
   const latlng = L.latLng(51.5, -0.09)
-  const point = map.latLngToContainerPoint(latlng)
+  const originalPoint = map.latLngToContainerPoint(latlng)
+  const initialZoom = map.getZoom()
 
   // Maximum width for the image
   const MAX_IMAGE_WIDTH = 200
 
   // Calculate scaling factor to fit the image within the maximum width
   const scale = MAX_IMAGE_WIDTH / img.width
-  const width = img.width * scale
-  const height = img.height * scale
+  const originalWidth = img.width * scale
+  const originalHeight = img.height * scale
 
   const konvaImage = new Konva.Image({
     image: img,
-    x: point.x,
-    y: point.y,
-    width: width,
-    height: height,
+    x: originalPoint.x,
+    y: originalPoint.y,
+    width: originalWidth,
+    height: originalHeight,
     draggable: true,
-    offsetX: width / 2,
-    offsetY: height / 2,
+    offsetX: originalWidth / 2,
+    offsetY: originalHeight / 2,
   })
   layer.add(konvaImage)
   layer.draw()
@@ -58,6 +59,33 @@ img.onload = function () {
     layer.draw()
   })
 
+  // Disable map interactions when manipulating the image
+  konvaImage.on('transformstart', function () {
+    map.dragging.disable()
+    map.touchZoom.disable()
+    map.doubleClickZoom.disable()
+    map.scrollWheelZoom.disable()
+    map.boxZoom.disable()
+    map.keyboard.disable()
+  })
+
+  konvaImage.on('transformend', function () {
+    map.dragging.enable()
+    map.touchZoom.enable()
+    map.doubleClickZoom.enable()
+    map.scrollWheelZoom.enable()
+    map.boxZoom.enable()
+    map.keyboard.enable()
+  })
+
+  konvaImage.on('dragstart', function () {
+    map.dragging.disable()
+  })
+
+  konvaImage.on('dragend', function () {
+    map.dragging.enable()
+  })
+
   // Hide transformer when clicking outside the image
   stage.on('click', function (e) {
     if (e.target === stage) {
@@ -66,16 +94,21 @@ img.onload = function () {
     }
   })
 
-  // Update image position on map move or zoom
-  map.on('move', updateImagePosition)
-  map.on('zoom', updateImagePosition)
+  // Update image position and scale on map move or zoom
+  map.on('move', updateImagePositionAndScale)
+  map.on('zoom', updateImagePositionAndScale)
 
-  function updateImagePosition() {
+  function updateImagePositionAndScale() {
     const point = map.latLngToContainerPoint(latlng)
+    const zoomScale = map.getZoomScale(map.getZoom(), initialZoom)
+
     konvaImage.position({
       x: point.x,
       y: point.y,
     })
+    konvaImage.width(originalWidth * zoomScale)
+    konvaImage.height(originalHeight * zoomScale)
+
     layer.batchDraw()
   }
 
